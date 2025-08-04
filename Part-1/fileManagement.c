@@ -6,7 +6,7 @@
 #include <fcntl.h>
 #include <string.h>
 
-char* to_string(int n) {
+char* to_string(int n){
     if (n == 0) {
         char* zero = malloc(2);
         zero[0] = '0';
@@ -27,6 +27,37 @@ char* to_string(int n) {
     }
     str[length] = '\0'; 
     return str;
+}
+
+char** readContent(char* contentPath, int lineCount){
+    int original_stdin = dup(STDIN_FILENO);
+    int content = open(contentPath, O_RDONLY);
+    if (content == -1) {
+        perror("error opening content.txt");
+        return NULL;
+    }
+    dup2(content, STDIN_FILENO);
+    close(content);
+
+    char** lines = (char**)malloc(sizeof(char*)*lineCount);
+    for(int i = 0; i < lineCount; i++){
+        lines[i] = (char*)malloc(sizeof(char)*1025);
+        scanf(" %1024[^\n]%*c", lines[i]);
+    }
+
+    dup2(original_stdin, STDIN_FILENO);
+    close(original_stdin);
+    clearerr(stdin);
+
+    return lines;
+}
+
+void freeLines(char** lines, int lineCount){
+    for(int i = 0; i < lineCount; i++){
+        free(lines[i]);
+    }
+    free(lines);
+    return;
 }
 
 void writeToLogs(char* logsPath, char* log){
@@ -91,17 +122,10 @@ void handlePRINT(char* logsPath, char* contentPath){
     clearerr(stdin);
 }
 
-void handleFIRST(char* logsPath, char* contentPath){
+void handleFIRST(char* logsPath, char* contentPath, int lineCount){
     int n;
     scanf("%d", &n);
-
-    // char dummy[1025];
-    // scanf("%*[ ]"); // skip spaces
-    // if (scanf("%1024[^\n]", dummy) == 1) {
-    //     scanf("%*c"); // consume newline
-    // }
     
-
     char* n_string = to_string(n);
     char operation[11] = "FIRST ";
     strcat(operation, n_string);
@@ -111,26 +135,35 @@ void handleFIRST(char* logsPath, char* contentPath){
     dup2(original_stdout, STDOUT_FILENO);
     close(original_stdout);
 
-    int original_stdin = dup(STDIN_FILENO);
-    int content = open(contentPath, O_RDONLY);
-    if (content == -1) {
-        perror("failed opening content.txt");
-        return;
+    char** lines = readContent(contentPath, lineCount);
+    for(int i = 0; i < n && i < lineCount; i++){
+        printf("%s\n", lines[i]);
     }
-    dup2(content, STDIN_FILENO);
-    close(content);
+    freeLines(lines, lineCount);
+    free(n_string);
+    return;
+}
 
-    int count = 0;
-    char line[1025];
-    while (count < n && scanf("%1024[^\n]", line) == 1) {
-        printf("%s\n", line);
-        scanf("%*c");
-        count++;
+void handleLAST(char* logsPath, char* contentPath, int lineCount){
+    int n;
+    scanf("%d", &n);
+    
+    char* n_string = to_string(n);
+    char operation[10] = "LAST ";
+    strcat(operation, n_string);
+
+    int original_stdout = dup(STDOUT_FILENO);
+    writeToLogs(logsPath, operation);
+    dup2(original_stdout, STDOUT_FILENO);
+    close(original_stdout);
+
+    char** lines = readContent(contentPath, lineCount);
+    for(int i = lineCount - n; i < lineCount; i++){
+        if(i < 0) continue; 
+        printf("%s\n", lines[i]);
     }
 
-    dup2(original_stdin, STDIN_FILENO);
-    close(original_stdin);
-    clearerr(stdin);
+    freeLines(lines, lineCount);
     free(n_string);
     return;
 }
@@ -168,10 +201,21 @@ int main(){
             handlePRINT(logsPath, contentPath);
         } 
         else if (!strcmp(op, "FIRST")) {
-            handleFIRST(logsPath, contentPath);
+            handleFIRST(logsPath, contentPath, lineCount);
         }
-    
+        else if (!strcmp(op, "LAST")) {
+            handleLAST(logsPath, contentPath, lineCount);
+        }
+        else if (!strcmp(op, "STOP")) {
+            int original_stdout = dup(STDOUT_FILENO);
+            writeToLogs(logsPath, "STOP");
+            dup2(original_stdout, STDOUT_FILENO);
+            close(original_stdout);
+            break;
+        }
+        else {
+            printf("Unknown command.\n");
+        }
     }
-
-
+    return 0;
 }
